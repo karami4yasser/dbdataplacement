@@ -1,0 +1,35 @@
+database:
+  host: localhost
+  svc: EEDBYK
+  port: 1521
+  connectionstring: sys/p8zDrj6LbuOGlhH@//localhost:1521/EEDBYK as sysdba
+  user:
+    username: SYS as SYSDBA
+    password: p8zDrj6LbuOGlhH
+max_rows_per_file: 10000000
+server:
+  port: 8480
+logging:
+  level:
+    org:
+      hibernate:
+        stat: DEBUG
+spring:
+  application:
+    name: dbdataplacement
+  datasource:
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+    #jdbc:oracle:thin:@ykarami-mac:1521:EEDBYK
+    url: jdbc:oracle:thin:@${database.host}:${database.port}/${database.svc}
+    username: ${database.user.username}
+    password: ${database.user.password}
+    hikari:
+      connection-timeout: 100000
+      maximum-pool-size: 150
+  jpa:
+    database-platform: org.hibernate.dialect.Oracle12cDialect
+    database: oracle
+    properties:
+      hibernate:
+        default_schema: ${database.schema}
+    open-in-view: false
