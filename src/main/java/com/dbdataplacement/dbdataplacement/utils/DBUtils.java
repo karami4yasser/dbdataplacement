@@ -9,6 +9,8 @@ import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -232,6 +234,55 @@ public class DBUtils {
 
         return rowCount.get();
     }
+    public Map<String, Object> generateTableStatistics(String table) {
+        EntityManager entityManager = entityManagerFactory.createEntityManager();
+        Session session = entityManager.unwrap(Session.class);
+        Map<String, Object> statistics = new HashMap<>();
 
+        session.doWork(connection -> {
+            try {
+                Statement statement = connection.createStatement();
+
+                // Get the number of rows
+                String countQuery = String.format("SELECT COUNT(*) FROM %s", table);
+                ResultSet countResult = statement.executeQuery(countQuery);
+                if (countResult.next()) {
+                    statistics.put("row_count", countResult.getInt(1));
+                }
+
+                // Get the average age
+                String avgAgeQuery = String.format("SELECT AVG(age) FROM %s", table);
+                ResultSet avgAgeResult = statement.executeQuery(avgAgeQuery);
+                if (avgAgeResult.next()) {
+                    statistics.put("average_age", avgAgeResult.getDouble(1));
+                }
+
+                // Get the minimum age
+                String minAgeQuery = String.format("SELECT MIN(age) FROM %s", table);
+                ResultSet minAgeResult = statement.executeQuery(minAgeQuery);
+                if (minAgeResult.next()) {
+                    statistics.put("min_age", minAgeResult.getInt(1));
+                }
+
+                // Get the maximum age
+                String maxAgeQuery = String.format("SELECT MAX(age) FROM %s", table);
+                ResultSet maxAgeResult = statement.executeQuery(maxAgeQuery);
+                if (maxAgeResult.next()) {
+                    statistics.put("max_age", maxAgeResult.getInt(1));
+                }
+
+                // Close the resources
+                countResult.close();
+                avgAgeResult.close();
+                minAgeResult.close();
+                maxAgeResult.close();
+                statement.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        return statistics;
+    }
 
 }
