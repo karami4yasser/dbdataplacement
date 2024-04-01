@@ -7,21 +7,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
-import java.io.File;
-import java.io.IOException;
-import java.sql.SQLException;
+import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @Transactional
 public class DBUtils {
     private final  EntityManagerFactory entityManagerFactory;
-    @Value("${database.connectionstring}")
-    private String connectionstring;
 
     public DBUtils(EntityManagerFactory entityManagerFactory) {
         this.entityManagerFactory = entityManagerFactory;
@@ -159,121 +153,85 @@ public class DBUtils {
     }
 
 
-    /**
-     *
-     * @param sourceTable
-     * @param destinationTable
-     * @return
-     * @throws SQLException
-     * @throws IOException
-     * @throws ExecutionException
-     * @throws InterruptedException
-     */
-    public Boolean sqlLoaderArchive(String sourceTable,String destinationTable) throws SQLException, IOException, ExecutionException, InterruptedException {
-        String targetClassesDirPath = new File(DBUtils.class.getProtectionDomain().getCodeSource().getLocation().getPath()).getPath();
-        long start = System.currentTimeMillis();
-        int numberOfFile = OracleSqlLoader.exportDataToSqlLoaderFiles(entityManagerFactory,sourceTable,targetClassesDirPath);
-
-        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()*2);
-        List<Future<Boolean>> futures = new ArrayList<>();
-
-        for (int i = 0; i < numberOfFile; i++) {
-            final int fileIndex = i;
-            Future<Boolean> future = executor.submit(() -> {
-                String fileName = String.format("%s/%s_data_part_%s.txt",targetClassesDirPath, sourceTable, fileIndex);
-                OracleSqlLoader.Results results = OracleSqlLoader.bulkLoad(entityManagerFactory, "\"%s\"".formatted(connectionstring), destinationTable, new File(fileName));
-                if (results.exitCode != OracleSqlLoader.ExitCode.SUCCESS) {
-                    System.err.println("Failed. Exit code: " + results.exitCode + ". See log file: " + results.logFile);
-                    return false;
-                }
-                return true;
-            });
-            futures.add(future);
-        }
-
-        // Shutdown executor service
-        executor.shutdown();
-
-        // Wait for all tasks to complete
-        try {
-            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-        } catch (InterruptedException e) {
-            System.err.println("Executor service was interrupted.");
-        }
-
-        boolean result = true;
-        // Check results
-        for (Future<Boolean> future : futures) {
-            try {
-                if (!future.get()) {
-                    result = false;
-                    break;
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                // Handle exception
-                e.printStackTrace();
-            }
-        }
-
-        boolean resultFinal = result;
-
-        if (result) {
-            resultFinal =deleteAllFromTable(sourceTable);
-        }
-        long time = System.currentTimeMillis() - start;
-        System.out.println("sqlLoaderArchive took : " + time+ " ms");
-        return resultFinal;
-    }
-
-
-    public boolean initData(String table,int numRows) {
-
+    public boolean createTable(String table) {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
-
-        String INIT_DATA= String.format("insert into %s select rownum, 'Name'||rownum from dual connect by rownum<=%s",table,numRows);
-
         AtomicBoolean success = new AtomicBoolean(Boolean.TRUE);
 
         session.doWork(connection -> {
             try {
-                long start = System.currentTimeMillis();
-                connection.setAutoCommit(false);
                 Statement statement = connection.createStatement();
 
-                // Execute the insert query
-                int rowsInserted = statement.executeUpdate(INIT_DATA);
+                // Drop the table if it exists
+                String dropQuery = String.format("DROP TABLE %s", table);
+                statement.executeUpdate(dropQuery);
 
+                // Create the table
+                String createQuery = String.format("CREATE TABLE %s (id NUMBER, name VARCHAR2(50), age NUMBER, email VARCHAR2(100))", table);
+                statement.executeUpdate(createQuery);
 
-                // Commit the transaction
-                connection.commit();
                 // Close the resources
                 statement.close();
-                connection.close();
-                long time = System.currentTimeMillis() - start;
-                System.out.println(rowsInserted + " rows inserted into " + table+".");
-                System.out.println("initData took : " + time+ " ms");
-
-
-            }
-            catch (Exception e) {
-                connection.rollback();
+                System.out.println("Table " + table + " created successfully.");
+            } catch (Exception e) {
                 e.printStackTrace();
                 success.set(Boolean.FALSE);
-            }
-            finally {
-                try {
-                    connection.close();
-                }
-                catch (Exception e) {
-                    e.printStackTrace();
-                    success.set(Boolean.FALSE);
-                }
-
             }
         });
 
         return success.get();
     }
+
+    public boolean insertData(String table, int numRows) {
+        EntityManager entityManager = entityManagerFactory.createEntityManager();
+        Session session = entityManager.unwrap(Session.class);
+        AtomicBoolean success = new AtomicBoolean(Boolean.TRUE);
+
+        session.doWork(connection -> {
+            try {
+                Statement statement = connection.createStatement();
+
+                // Insert fake data
+                String insertQuery = String.format("INSERT INTO %s SELECT ROWNUM, 'Name' || ROWNUM, FLOOR(DBMS_RANDOM.VALUE(18, 80)), 'email' || ROWNUM || '@example.com' FROM dual CONNECT BY ROWNUM <= %d", table, numRows);
+                int rowsInserted = statement.executeUpdate(insertQuery);
+
+                // Close the resources
+                statement.close();
+                System.out.println(rowsInserted + " rows inserted into " + table + ".");
+            } catch (Exception e) {
+                e.printStackTrace();
+                success.set(Boolean.FALSE);
+            }
+        });
+
+        return success.get();
+    }
+
+    public int getRowCount(String table) {
+        EntityManager entityManager = entityManagerFactory.createEntityManager();
+        Session session = entityManager.unwrap(Session.class);
+        AtomicInteger rowCount = new AtomicInteger(0);
+
+        session.doWork(connection -> {
+            try {
+                Statement statement = connection.createStatement();
+                String countQuery = String.format("SELECT COUNT(*) FROM %s", table);
+                ResultSet resultSet = statement.executeQuery(countQuery);
+
+                if (resultSet.next()) {
+                    rowCount.set(resultSet.getInt(1));
+                }
+
+                // Close the resources
+                resultSet.close();
+                statement.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        return rowCount.get();
+    }
+
 
 }
