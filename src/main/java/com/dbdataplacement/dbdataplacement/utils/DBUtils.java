@@ -27,7 +27,8 @@ public class DBUtils {
      *
      * @param sourceTable
      * @param destinationTable
-     * @return
+     * @return status of operation success/failure
+     * move data to destinationTable , then delete all moved data form sourceTable
      */
     public boolean insertIntoSelectAndDelete(String sourceTable,String destinationTable) {
     long start = System.currentTimeMillis();
@@ -42,6 +43,13 @@ public class DBUtils {
     return result;
 }
 
+    /**
+     *
+     * @param sourceTable
+     * @param destinationTable
+     * @return status of operation success/failure
+     * insert data to the destinationTable using insert into select
+     */
     public boolean insertIntoSelect(String sourceTable,String destinationTable) {
 
         EntityManager entityManager = entityManagerFactory.createEntityManager();
@@ -99,7 +107,8 @@ public class DBUtils {
     /**
      *
      * @param sourceTable
-     * @return
+     * @return status of operation success/failure
+     * delete all table rows
      */
     public boolean deleteAllFromTable(String sourceTable) {
 
@@ -155,6 +164,12 @@ public class DBUtils {
     }
 
 
+    /**
+     *
+     * @param table
+     * @return status of operation success/failure
+     * create a table in DB , used for validation and testing purposes
+     */
     public boolean createTable(String table) {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
@@ -184,6 +199,13 @@ public class DBUtils {
         return success.get();
     }
 
+    /**
+     *
+     * @param table
+     * @param numRows
+     * @return status of operation success/failure
+     * This method will insert fake data to the specified table , for testing purposes.
+     */
     public boolean insertData(String table, int numRows) {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
@@ -209,6 +231,12 @@ public class DBUtils {
         return success.get();
     }
 
+    /**
+     *
+     * @param table
+     * @return number rows
+     * returns the number of rows in the specified table
+     */
     public int getRowCount(String table) {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
@@ -234,6 +262,13 @@ public class DBUtils {
 
         return rowCount.get();
     }
+
+    /**
+     *
+     * @param table
+     * @return map of tables statistics
+     * generate some statistics about the table data , used for validation and testing purposes
+     */
     public Map<String, Object> generateTableStatistics(String table) {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);

@@ -24,7 +24,7 @@ public class DbDataPlacementController {
         this.dbDataPlacementServiceInsertSelect = new DbDataPlacementServiceInsertSelect(dbUtils);
     }
 
-    @PostMapping("/selectinsert")
+    @PostMapping("/archive")
     public boolean moveDataToArchiveTableSelectInsert(
              @RequestBody MoveDataToArchiveTableRequestDto dto
     ) throws SQLException, IOException, ExecutionException, InterruptedException {
