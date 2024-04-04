@@ -18,10 +18,59 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Transactional
 public class DBUtils {
     private final  EntityManagerFactory entityManagerFactory;
+    @Value("${tables.eft_tra.name}")
+    private  String EFT_TRA_NAME;
+    @Value("${tables.eft_tra.archiveTableName}")
+    private  String EFT_TRA_ARCHIVE_NAME;
+    @Value("${tables.eft_tra.condition}")
+    private  String EFT_TRA_CONDITION;
+
+    @Value("${tables.eft_aud.name}")
+    private  String EFT_AUD_NAME;
+    @Value("${tables.eft_aud.archiveTableName}")
+    private  String EFT_AUD_ARCHIVE_NAME;
+    @Value("${tables.eft_aud.condition}")
+    private  String EFT_AUD_CONDITION;
 
     public DBUtils(EntityManagerFactory entityManagerFactory) {
         this.entityManagerFactory = entityManagerFactory;
     }
+
+    /**
+     *
+     * @return status of operation success/failure
+     * move data
+     */
+    public boolean moveDataAllTables() {
+        long start = System.currentTimeMillis();
+
+        boolean result1 = moveDataTable(EFT_TRA_NAME,EFT_TRA_ARCHIVE_NAME,EFT_TRA_CONDITION);
+        boolean result2 = moveDataTable(EFT_AUD_NAME,EFT_AUD_ARCHIVE_NAME,EFT_AUD_CONDITION);
+        long time = System.currentTimeMillis() - start;
+        System.out.println("insertIntoSelectAndDelete for all tables took : " + time+ " ms");
+        return result1&&result2;
+    }
+
+    /**
+     *
+     * @param sourceTable
+     * @param destinationTable
+     * @param condition
+     * @return status of operation success/failure
+     */
+    public boolean moveDataTable(String sourceTable,String destinationTable,String condition) {
+        long start = System.currentTimeMillis();
+
+        boolean result = true;
+
+        if(insertIntoSelect(sourceTable,destinationTable,condition)) {
+            result= deleteAllFromTable(sourceTable,condition);
+        }
+        long time = System.currentTimeMillis() - start;
+        System.out.println("insertIntoSelectAndDelete for table "+ sourceTable+ " took : " + time+ " ms");
+        return result;
+    }
+
 
     /**
      *
@@ -30,16 +79,16 @@ public class DBUtils {
      * @return status of operation success/failure
      * move data to destinationTable , then delete all moved data form sourceTable
      */
-    public boolean insertIntoSelectAndDelete(String sourceTable,String destinationTable) {
+    public boolean insertIntoSelectAndDelete(String sourceTable,String destinationTable,String condition) {
     long start = System.currentTimeMillis();
 
     boolean result = true;
 
-    if(insertIntoSelect(sourceTable,destinationTable)) {
-        result= deleteAllFromTable(sourceTable);
+    if(insertIntoSelect(sourceTable,destinationTable,condition)) {
+        result= deleteAllFromTable(sourceTable,condition);
     }
     long time = System.currentTimeMillis() - start;
-    System.out.println("insertIntoSelectAndDelete took : " + time+ " ms");
+    System.out.println("insertIntoSelectAndDelete for table "+ sourceTable+ " took : " + time+ " ms");
     return result;
 }
 
@@ -50,17 +99,12 @@ public class DBUtils {
      * @return status of operation success/failure
      * insert data to the destinationTable using insert into select
      */
-    public boolean insertIntoSelect(String sourceTable,String destinationTable) {
+    public boolean insertIntoSelect(String sourceTable,String destinationTable,String condition) {
 
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
 
-        String INSERT_PARALLEL_SELECT_QUERY = String.format("INSERT /*+ PARALLEL(%s,4) */ INTO %s SELECT * FROM %s",destinationTable,destinationTable,sourceTable);
-        String DELETE_PARALLEL_QUERY = String.format("DELETE /*+ PARALLEL(%s,4) */ FROM %s",sourceTable,sourceTable);
-        String INSERT_SELECT_QUERY = String.format("INSERT  INTO %s SELECT * FROM %s",destinationTable,sourceTable);
-        String DELETE_QUERY = String.format("DELETE  FROM %s",sourceTable);
-        String ALTER_SESSION_ENABLE_PARALLEL= "ALTER SESSION ENABLE PARALLEL DML";
-
+        String INSERT_SELECT_QUERY = String.format("INSERT  INTO %s SELECT * FROM %s %s",destinationTable,sourceTable,condition);
         AtomicBoolean success = new AtomicBoolean(Boolean.TRUE);
 
         session.doWork(connection -> {
@@ -110,13 +154,13 @@ public class DBUtils {
      * @return status of operation success/failure
      * delete all table rows
      */
-    public boolean deleteAllFromTable(String sourceTable) {
+    public boolean deleteAllFromTable(String sourceTable,String condition) {
 
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
 
-        String DELETE_QUERY = String.format("DELETE  FROM %s",sourceTable);
-        String DELETE_PARALLEL_QUERY = String.format("DELETE /*+ PARALLEL(%s,4) */ FROM %s",sourceTable,sourceTable);
+
+        String DELETE_PARALLEL_QUERY = String.format("DELETE /*+ PARALLEL(%s,4) */ FROM %s %s",sourceTable,sourceTable,condition);
         String ALTER_SESSION_ENABLE_PARALLEL= "ALTER SESSION ENABLE PARALLEL DML";
 
         AtomicBoolean success = new AtomicBoolean(Boolean.TRUE);
@@ -164,72 +208,7 @@ public class DBUtils {
     }
 
 
-    /**
-     *
-     * @param table
-     * @return status of operation success/failure
-     * create a table in DB , used for validation and testing purposes
-     */
-    public boolean createTable(String table) {
-        EntityManager entityManager = entityManagerFactory.createEntityManager();
-        Session session = entityManager.unwrap(Session.class);
-        AtomicBoolean success = new AtomicBoolean(Boolean.TRUE);
 
-        session.doWork(connection -> {
-            try {
-                Statement statement = connection.createStatement();
-
-                // Drop the table if it exists
-                String dropQuery = String.format("DROP TABLE %s", table);
-                statement.executeUpdate(dropQuery);
-
-                // Create the table
-                String createQuery = String.format("CREATE TABLE %s (id NUMBER, name VARCHAR2(50), age NUMBER, email VARCHAR2(100))", table);
-                statement.executeUpdate(createQuery);
-
-                // Close the resources
-                statement.close();
-                System.out.println("Table " + table + " created successfully.");
-            } catch (Exception e) {
-                e.printStackTrace();
-                success.set(Boolean.FALSE);
-            }
-        });
-
-        return success.get();
-    }
-
-    /**
-     *
-     * @param table
-     * @param numRows
-     * @return status of operation success/failure
-     * This method will insert fake data to the specified table , for testing purposes.
-     */
-    public boolean insertData(String table, int numRows) {
-        EntityManager entityManager = entityManagerFactory.createEntityManager();
-        Session session = entityManager.unwrap(Session.class);
-        AtomicBoolean success = new AtomicBoolean(Boolean.TRUE);
-
-        session.doWork(connection -> {
-            try {
-                Statement statement = connection.createStatement();
-
-                // Insert fake data
-                String insertQuery = String.format("INSERT INTO %s SELECT ROWNUM, 'Name' || ROWNUM, FLOOR(DBMS_RANDOM.VALUE(18, 80)), 'email' || ROWNUM || '@example.com' FROM dual CONNECT BY ROWNUM <= %d", table, numRows);
-                int rowsInserted = statement.executeUpdate(insertQuery);
-
-                // Close the resources
-                statement.close();
-                System.out.println(rowsInserted + " rows inserted into " + table + ".");
-            } catch (Exception e) {
-                e.printStackTrace();
-                success.set(Boolean.FALSE);
-            }
-        });
-
-        return success.get();
-    }
 
     /**
      *
@@ -237,7 +216,7 @@ public class DBUtils {
      * @return number rows
      * returns the number of rows in the specified table
      */
-    public int getRowCount(String table) {
+    public int getRowCount(String table,String condition) {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
         AtomicInteger rowCount = new AtomicInteger(0);
@@ -245,7 +224,7 @@ public class DBUtils {
         session.doWork(connection -> {
             try {
                 Statement statement = connection.createStatement();
-                String countQuery = String.format("SELECT COUNT(*) FROM %s", table);
+                String countQuery = String.format("SELECT COUNT(*) FROM %s %s", table,condition);
                 ResultSet resultSet = statement.executeQuery(countQuery);
 
                 if (resultSet.next()) {
@@ -269,7 +248,7 @@ public class DBUtils {
      * @return map of tables statistics
      * generate some statistics about the table data , used for validation and testing purposes
      */
-    public Map<String, Object> generateTableStatistics(String table) {
+    public Map<String, Object> generateTableStatistics(String table,String condition) {
         EntityManager entityManager = entityManagerFactory.createEntityManager();
         Session session = entityManager.unwrap(Session.class);
         Map<String, Object> statistics = new HashMap<>();
@@ -279,38 +258,15 @@ public class DBUtils {
                 Statement statement = connection.createStatement();
 
                 // Get the number of rows
-                String countQuery = String.format("SELECT COUNT(*) FROM %s", table);
+                String countQuery = String.format("SELECT COUNT(*) FROM %s %s", table,condition);
                 ResultSet countResult = statement.executeQuery(countQuery);
                 if (countResult.next()) {
                     statistics.put("row_count", countResult.getInt(1));
                 }
 
-                // Get the average age
-                String avgAgeQuery = String.format("SELECT AVG(age) FROM %s", table);
-                ResultSet avgAgeResult = statement.executeQuery(avgAgeQuery);
-                if (avgAgeResult.next()) {
-                    statistics.put("average_age", avgAgeResult.getDouble(1));
-                }
-
-                // Get the minimum age
-                String minAgeQuery = String.format("SELECT MIN(age) FROM %s", table);
-                ResultSet minAgeResult = statement.executeQuery(minAgeQuery);
-                if (minAgeResult.next()) {
-                    statistics.put("min_age", minAgeResult.getInt(1));
-                }
-
-                // Get the maximum age
-                String maxAgeQuery = String.format("SELECT MAX(age) FROM %s", table);
-                ResultSet maxAgeResult = statement.executeQuery(maxAgeQuery);
-                if (maxAgeResult.next()) {
-                    statistics.put("max_age", maxAgeResult.getInt(1));
-                }
 
                 // Close the resources
                 countResult.close();
-                avgAgeResult.close();
-                minAgeResult.close();
-                maxAgeResult.close();
                 statement.close();
             } catch (Exception e) {
                 e.printStackTrace();

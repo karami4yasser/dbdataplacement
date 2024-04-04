@@ -6,7 +6,16 @@ database:
   user:
     username: SYS as SYSDBA
     password: p8zDrj6LbuOGlhH
-max_rows_per_file: 10000000
+tables:
+  eft_tra:
+    name: EFT_TRA
+    archiveTableName: EFT_TRA_HISTORY
+    condition: where process_code in (0,11,13)
+  eft_aud:
+    name: EFT_AUD
+    archiveTableName: EFT_AUD_HISTORY
+    condition: where completed_indicator = 'C'
+
 server:
   port: 8480
 logging:
