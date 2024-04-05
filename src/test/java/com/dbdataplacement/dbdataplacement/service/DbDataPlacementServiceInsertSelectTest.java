@@ -1,11 +1,16 @@
 package com.dbdataplacement.dbdataplacement.service;
 
 import com.dbdataplacement.dbdataplacement.utils.DBUtils;
-import org.junit.jupiter.api.*;
+import com.dbdataplacement.dbdataplacement.utils.TableProperties;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.io.FileNotFoundException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -41,7 +46,8 @@ public class DbDataPlacementServiceInsertSelectTest {
 
     @Test
     @Order(0)
-    public void init() {
+    public void init() throws FileNotFoundException {
+        TableProperties.getTables();
         this.originalTableStatistics_EFT_TRA =dbUtils.generateTableStatistics(EFT_TRA_NAME,EFT_TRA_CONDITION);
         this.originalTableStatistics_EFT_AUD =dbUtils.generateTableStatistics(EFT_AUD_NAME,EFT_AUD_CONDITION);
     }

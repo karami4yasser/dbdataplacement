@@ -9,7 +9,9 @@ import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,6 +34,8 @@ public class DBUtils {
     @Value("${tables.eft_aud.condition}")
     private  String EFT_AUD_CONDITION;
 
+    private final   Map<String, TableProperties.TableConfig> tablesConfigMap = TableProperties.getTables();
+
     public DBUtils(EntityManagerFactory entityManagerFactory) {
         this.entityManagerFactory = entityManagerFactory;
     }
@@ -44,11 +48,14 @@ public class DBUtils {
     public boolean moveDataAllTables() {
         long start = System.currentTimeMillis();
 
-        boolean result1 = moveDataTable(EFT_TRA_NAME,EFT_TRA_ARCHIVE_NAME,EFT_TRA_CONDITION);
-        boolean result2 = moveDataTable(EFT_AUD_NAME,EFT_AUD_ARCHIVE_NAME,EFT_AUD_CONDITION);
+
+        List<Boolean> results = tablesConfigMap.keySet().stream().map(
+                (tableConfigMap) -> moveDataTable(tablesConfigMap.get(tableConfigMap).getName(),tablesConfigMap.get(tableConfigMap).getArchiveTableName(),tablesConfigMap.get(tableConfigMap).getCondition())
+        ).toList()
+        ;
         long time = System.currentTimeMillis() - start;
         System.out.println("insertIntoSelectAndDelete for all tables took : " + time+ " ms");
-        return result1&&result2;
+        return results.stream().allMatch(Boolean.TRUE::equals);
     }
 
     /**
